@@ -46,9 +46,9 @@ function App() {
 
       const response = await axios.post('http://localhost:8000/chat', payload);
 
-      const aiMessage = typeof response.data === 'string'
-        ? response.data
-        : response.data.message || 'Response received';
+      const aiMessage = typeof response.data === 'string'? response.data:response.data.response || 'Response received'; 
+
+
 
       setMessages(prev => [...prev, { role: 'assistant', content: aiMessage }]);
 
