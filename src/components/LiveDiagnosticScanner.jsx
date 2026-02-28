@@ -44,7 +44,7 @@ export default function LiveDiagnosticScanner({
         setSetupState('Fetching secure token...');
         
         // Use the stable ID for the handshake
-        const response = await axios.get(`http://localhost:8000/generate-video-token?user_id=${stablePatientId}`);
+        const response = await axios.get(`https://eyecarebackend.onrender.com/generate-video-token?user_id=${stablePatientId}`);
         const { token, call_id, user_id, api_key } = response.data;
 
         if (!mounted) return;
@@ -96,7 +96,7 @@ export default function LiveDiagnosticScanner({
     if (client && call && currentCallId) {
       pollInterval = setInterval(async () => {
         try {
-          const res = await axios.get(`http://localhost:8000/diagnostic-results/${currentCallId}`);
+          const res = await axios.get(`https://eyecarebackend.onrender.com/diagnostic-results/${currentCallId}`);
           
           if (res.data.status === 'complete') {
             clearInterval(pollInterval);
