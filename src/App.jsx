@@ -17,7 +17,7 @@ function App() {
   const [threadId] = useState(() => generateThreadId());
   const chatEndRef = useRef(null);
   const fileInputRef = useRef(null); 
-
+  const inputRef = useRef(null);
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, visionTask]);
