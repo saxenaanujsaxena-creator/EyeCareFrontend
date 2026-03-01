@@ -13,6 +13,7 @@ import '@stream-io/video-react-sdk/dist/css/styles.css';
 
 export default function LiveDiagnosticScanner({ 
   visionTaskType, 
+  callId, // --- THE FIX: We receive the callId from App.js ---
   onComplete, 
   onCancel,
   patientId
@@ -23,11 +24,9 @@ export default function LiveDiagnosticScanner({
   const [setupState, setSetupState] = useState('Initializing secure connection...');
   const [error, setError] = useState(null);
 
-  // Stability for React 18 Strict Mode
   const stablePatientId = useRef(patientId || `patient_${Math.floor(Math.random() * 10000)}`).current;
   const hasFetchedToken = useRef(false);
 
-  // --- 1. SETUP THE STREAM MULTI-MODAL CONNECTION ---
   useEffect(() => {
     let mounted = true;
     let myClient = null;
@@ -41,20 +40,21 @@ export default function LiveDiagnosticScanner({
         setSetupState('Fetching secure token...');
         
         const response = await axios.get(`https://monotonousharshh-harsh-devs.hf.space/generate-video-token?user_id=${stablePatientId}`);
-        const { token, call_id, user_id, api_key } = response.data;
+        // --- THE FIX: We no longer pull call_id from here, we just use the token! ---
+        const { token, user_id, api_key } = response.data;
 
         if (!mounted) return;
 
-        setCurrentCallId(call_id);
+        // --- THE FIX: Tell the Stream SDK to connect to the backend's room ---
+        setCurrentCallId(callId);
         setSetupState('Connecting to Edge Network...');
         
         myClient = new StreamVideoClient({ apiKey: api_key, user: { id: user_id }, token: token });
-        myCall = myClient.call('default', call_id);
+        myCall = myClient.call('default', callId); 
         
         await myCall.join({ create: true });
-        if (!mounted) return; // FIX: Don't enable hardware if modal was closed during join
+        if (!mounted) return; 
         
-        // --- PRODUCTION FIX: ENABLE MULTI-MODAL HARDWARE ---
         await myCall.camera.enable();
         if (!mounted) return; 
 
@@ -71,14 +71,14 @@ export default function LiveDiagnosticScanner({
       }
     };
 
-    setupStream();
+    if (callId) {
+      setupStream();
+    }
 
     return () => {
       mounted = false;
       hasFetchedToken.current = false;
 
-      // FIX: Stream's leave() method automatically stops the camera and mic. 
-      // Manually calling disable() right before leave() causes the sfuClient crash!
       if (myCall) {
         myCall.leave().catch(console.error);
       }
@@ -86,9 +86,8 @@ export default function LiveDiagnosticScanner({
         myClient.disconnectUser().catch(console.error);
       }
     };
-  }, [stablePatientId]);
+  }, [stablePatientId, callId]);
 
-  // --- 2. POLL FOR DIAGNOSTIC RESULTS ---
   useEffect(() => {
     let pollInterval;
 
@@ -165,7 +164,6 @@ export default function LiveDiagnosticScanner({
               </div>
             </div>
 
-            {/* Added Audio Indicator Overlay */}
             <div className="absolute top-4 right-4 bg-black/60 px-3 py-2 rounded-lg backdrop-blur-sm border border-slate-800 z-10">
               <div className="flex items-center gap-2">
                 <Mic className="w-4 h-4 text-blue-400" />

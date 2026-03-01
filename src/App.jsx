@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import axios from 'axios';
-import { Cross, Send, Camera, Loader2 } from 'lucide-react'; // Added Camera & Loader2
+import { Cross, Send, Camera, Loader2 } from 'lucide-react';
 import ChatMessage from './components/ChatMessage';
 import LiveDiagnosticScanner from './components/LiveDiagnosticScanner';
 
@@ -12,18 +12,16 @@ function App() {
   const [messages, setMessages] = useState([]);
   const [inputValue, setInputValue] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
-  const [isUploading, setIsUploading] = useState(false); // New state for image upload
-  const [visionTask, setVisionTask] = useState({ active: false, type: null });
+  const [isUploading, setIsUploading] = useState(false); 
+  const [visionTask, setVisionTask] = useState({ active: false, type: null, callId: null });
   const [threadId] = useState(() => generateThreadId());
   const chatEndRef = useRef(null);
-  const inputRef = useRef(null);
-  const fileInputRef = useRef(null); // Reference for hidden file input
+  const fileInputRef = useRef(null); 
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, visionTask]);
 
-  // Updated to accept imageId
   const sendMessage = async (userMessage, diagnosticData = null, imageId = null) => {
     if (!userMessage?.trim() && !diagnosticData && !imageId) return;
 
@@ -42,7 +40,7 @@ function App() {
         user_id: 'patient_001',
         thread_id: threadId,
         message: newUserMessage || null,
-        image_id: imageId || null // Send the image ID to LangGraph
+        image_id: imageId || null 
       };
 
       if (diagnosticData) {
@@ -56,13 +54,15 @@ function App() {
 
       setMessages(prev => [...prev, { role: 'assistant', content: aiMessage }]);
 
+      // --- THE FIX: We capture the call_id from the backend here! ---
       if (response.data.video_stream_active === true) {
         setVisionTask({
           active: true,
-          type: response.data.functional_test_type || 'Vision Assessment'
+          type: response.data.functional_test_type || 'Vision Assessment',
+          callId: response.data.call_id 
         });
       } else {
-        setVisionTask({ active: false, type: null });
+        setVisionTask({ active: false, type: null, callId: null });
       }
 
     } catch (error) {
@@ -83,7 +83,6 @@ function App() {
     }
   };
 
-  // --- NEW IMAGE UPLOAD HANDLER ---
   const handleImageUpload = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -93,14 +92,11 @@ function App() {
     formData.append("file", file);
 
     try {
-      // 1. Upload the physical image to your FastAPI backend
       const uploadRes = await axios.post('https://monotonousharshh-harsh-devs.hf.space/upload', formData, {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
       
       const imageId = uploadRes.data.image_id;
-      
-      // 2. Send the LangGraph Chat Request with the imageId so it triggers PyTorch
       await sendMessage(null, null, imageId);
 
     } catch (error) {
@@ -108,18 +104,17 @@ function App() {
       setMessages(prev => [...prev, { role: 'assistant', content: 'Image upload failed. Please try again.' }]);
     } finally {
       setIsUploading(false);
-      // Reset the input so the same file can be selected again if needed
       if (fileInputRef.current) fileInputRef.current.value = "";
     }
   };
 
   const handleDiagnosticComplete = (diagnosticData) => {
-    setVisionTask({ active: false, type: null });
+    setVisionTask({ active: false, type: null, callId: null });
     sendMessage('', diagnosticData);
   };
 
   const handleDiagnosticCancel = () => {
-    setVisionTask({ active: false, type: null });
+    setVisionTask({ active: false, type: null, callId: null });
     setMessages(prev => [...prev, {
       role: 'assistant',
       content: 'Diagnostic scan cancelled. How else can I assist you?'
@@ -131,7 +126,6 @@ function App() {
   return (
     <div className="flex flex-col h-screen bg-slate-50">
       <header className="bg-white border-b border-slate-200 px-4 py-4 shadow-sm">
-        {/* ... (Header remains unchanged) ... */}
         <div className="max-w-4xl mx-auto flex items-center gap-3">
           <div className="w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center">
             <Cross className="w-6 h-6 text-white" />
@@ -147,7 +141,6 @@ function App() {
         <div className="max-w-4xl mx-auto">
           {messages.length === 0 && (
              <div className="text-center py-12">
-               {/* ... (Welcome UI remains unchanged) ... */}
                <h2 className="text-xl font-semibold text-slate-900 mb-2">Welcome to Agentic EyeCare</h2>
                <p className="text-slate-600 max-w-md mx-auto">Describe your vision concerns, or upload a photo of your eye for analysis.</p>
              </div>
@@ -160,6 +153,7 @@ function App() {
           {visionTask.active && (
             <LiveDiagnosticScanner
               visionTaskType={visionTask.type}
+              callId={visionTask.callId} // --- THE FIX: Passing it to the scanner ---
               onComplete={handleDiagnosticComplete}
               onCancel={handleDiagnosticCancel}
             />
@@ -167,7 +161,6 @@ function App() {
 
           {(isProcessing || isUploading) && !visionTask.active && (
             <div className="flex justify-start mb-4">
-              {/* ... (Loading dots remain unchanged) ... */}
               <div className="px-4 py-3 rounded-lg bg-white border border-slate-200 text-sm text-slate-500">
                 {isUploading ? 'Uploading image securely...' : 'Analyzing clinical data...'}
               </div>
@@ -181,7 +174,6 @@ function App() {
         <div className="max-w-4xl mx-auto">
           <form onSubmit={handleSubmit} className="flex gap-3 items-center">
             
-            {/* HIDDEN FILE INPUT */}
             <input 
               type="file" 
               accept="image/*" 
@@ -190,7 +182,6 @@ function App() {
               onChange={handleImageUpload} 
             />
             
-            {/* ATTACHMENT CAMERA BUTTON */}
             <button
               type="button"
               onClick={() => fileInputRef.current?.click()}
