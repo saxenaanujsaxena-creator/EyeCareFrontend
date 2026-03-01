@@ -44,7 +44,7 @@ function App() {
         payload.functional_test_type = visionTask.type;
       }
 
-      const response = await axios.post('https://eyecarebackend.onrender.com/chat', payload);
+      const response = await axios.post('https://monotonousharshh-harsh-devs.hf.space/chat', payload);
 
       const aiMessage = typeof response.data === 'string'? response.data:response.data.response || 'Response received'; 
 
@@ -64,7 +64,7 @@ function App() {
     } catch (error) {
       console.error('Error sending message:', error);
 
-      let errorMessage = 'Unable to connect to the diagnostic server. Please ensure the backend is running on https://eyecarebackend.onrender.com';
+      let errorMessage = 'Unable to connect to the diagnostic server. Please ensure the backend is running on https://monotonousharshh-harsh-devs.hf.space';
 
       if (error.response) {
         errorMessage = `Server error: ${error.response.status}. ${error.response.data?.detail || 'Please try again.'}`;
