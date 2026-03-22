@@ -15,9 +15,11 @@ function App() {
   const [isUploading, setIsUploading] = useState(false); 
   const [visionTask, setVisionTask] = useState({ active: false, type: null, callId: null });
   const [threadId] = useState(() => generateThreadId());
+  
   const chatEndRef = useRef(null);
   const fileInputRef = useRef(null); 
   const inputRef = useRef(null);
+
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, visionTask]);
@@ -37,7 +39,7 @@ function App() {
 
     try {
       const payload = {
-        user_id: 'patient_001',
+        user_id: 'patient_001', 
         thread_id: threadId,
         message: newUserMessage || null,
         image_id: imageId || null 
@@ -49,17 +51,21 @@ function App() {
         if (!payload.message) payload.message = "Diagnostic data submitted";
       }
 
-      const response = await axios.post('https://monotonousharshh-harsh-devs.hf.space/chat', payload);
+      // 🚨 FIX: Changed 0.0.0.0 to 127.0.0.1
+      const response = await axios.post('http://127.0.0.1:7860/chat', payload);
+      
       const aiMessage = typeof response.data === 'string' ? response.data : response.data.response || 'Response received'; 
-
       setMessages(prev => [...prev, { role: 'assistant', content: aiMessage }]);
 
-      // --- THE FIX: We capture the call_id from the backend here! ---
-      if (response.data.video_stream_active === true) {
+      // 🚨 FIX: Safely combined the scanner trigger logic to update the object correctly!
+      if (response.data.action === "trigger_scanner" || response.data.video_stream_active === true) {
+        const taskType = response.data.task_type || response.data.functional_test_type || 'plr_test';
+        console.log("🔥 Backend triggered a scan! Task:", taskType);
+        
         setVisionTask({
           active: true,
-          type: response.data.functional_test_type || 'Vision Assessment',
-          callId: response.data.call_id 
+          type: taskType,
+          callId: response.data.call_id || threadId // Fallback to threadId if backend misses it
         });
       } else {
         setVisionTask({ active: false, type: null, callId: null });
@@ -92,16 +98,15 @@ function App() {
     formData.append("file", file);
 
     try {
-      const uploadRes = await axios.post('https://monotonousharshh-harsh-devs.hf.space/upload', formData, {
+      // 🚨 FIX: Changed 0.0.0.0 to 127.0.0.1
+      const uploadRes = await axios.post('http://127.0.0.1:7860/upload', formData, {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
-      
       const imageId = uploadRes.data.image_id;
       await sendMessage(null, null, imageId);
-
     } catch (error) {
       console.error("Upload failed", error);
-      setMessages(prev => [...prev, { role: 'assistant', content: 'Image upload failed. Please try again.' }]);
+      setMessages(prev => [...prev, { role: 'assistant', content: 'Image upload failed.' }]);
     } finally {
       setIsUploading(false);
       if (fileInputRef.current) fileInputRef.current.value = "";
@@ -115,10 +120,7 @@ function App() {
 
   const handleDiagnosticCancel = () => {
     setVisionTask({ active: false, type: null, callId: null });
-    setMessages(prev => [...prev, {
-      role: 'assistant',
-      content: 'Diagnostic scan cancelled. How else can I assist you?'
-    }]);
+    setMessages(prev => [...prev, { role: 'assistant', content: 'Diagnostic scan cancelled.' }]);
   };
 
   const isInputDisabled = isProcessing || visionTask.active || isUploading;
@@ -142,27 +144,29 @@ function App() {
           {messages.length === 0 && (
              <div className="text-center py-12">
                <h2 className="text-xl font-semibold text-slate-900 mb-2">Welcome to Agentic EyeCare</h2>
-               <p className="text-slate-600 max-w-md mx-auto">Describe your vision concerns, or upload a photo of your eye for analysis.</p>
+               <p className="text-slate-600 max-w-md mx-auto">Describe symptoms or upload a photo of your eye.</p>
              </div>
           )}
-
           {messages.map((message, index) => (
             <ChatMessage key={index} role={message.role} content={message.content} />
           ))}
-
+          
           {visionTask.active && (
-            <LiveDiagnosticScanner
-              visionTaskType={visionTask.type}
-              callId={visionTask.callId} // --- THE FIX: Passing it to the scanner ---
-              onComplete={handleDiagnosticComplete}
-              onCancel={handleDiagnosticCancel}
-            />
+            <div className="mt-4">
+              <LiveDiagnosticScanner
+                visionTaskType={visionTask.type}
+                callId={visionTask.callId}
+                patientId="patient_001" 
+                onComplete={handleDiagnosticComplete}
+                onCancel={handleDiagnosticCancel}
+              />
+            </div>
           )}
 
           {(isProcessing || isUploading) && !visionTask.active && (
-            <div className="flex justify-start mb-4">
-              <div className="px-4 py-3 rounded-lg bg-white border border-slate-200 text-sm text-slate-500">
-                {isUploading ? 'Uploading image securely...' : 'Analyzing clinical data...'}
+            <div className="flex justify-start mb-4 mt-4">
+              <div className="px-4 py-3 rounded-lg bg-white border border-slate-200 text-sm text-slate-500 italic">
+                {isUploading ? 'Uploading image...' : 'Processing clinical request...'}
               </div>
             </div>
           )}
@@ -173,42 +177,30 @@ function App() {
       <footer className="bg-white border-t border-slate-200 px-4 py-4">
         <div className="max-w-4xl mx-auto">
           <form onSubmit={handleSubmit} className="flex gap-3 items-center">
-            
-            <input 
-              type="file" 
-              accept="image/*" 
-              className="hidden" 
-              ref={fileInputRef} 
-              onChange={handleImageUpload} 
-            />
-            
+            <input type="file" accept="image/*" className="hidden" ref={fileInputRef} onChange={handleImageUpload} />
             <button
               type="button"
               onClick={() => fileInputRef.current?.click()}
               disabled={isInputDisabled}
-              className="p-3 text-slate-500 bg-slate-100 rounded-lg hover:bg-slate-200 focus:outline-none transition-colors disabled:opacity-50"
-              title="Upload Eye Image"
+              className="p-3 text-slate-500 bg-slate-100 rounded-lg hover:bg-slate-200 disabled:opacity-50 transition-colors"
             >
               {isUploading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Camera className="w-5 h-5" />}
             </button>
-
             <input
               ref={inputRef}
               type="text"
               value={inputValue}
               onChange={(e) => setInputValue(e.target.value)}
-              placeholder={visionTask.active ? 'Diagnostic in progress...' : 'Describe symptoms or upload a photo...'}
+              placeholder={visionTask.active ? 'Diagnostic test active. Please follow agent instructions...' : 'Describe symptoms...'}
               disabled={isInputDisabled}
-              className="flex-1 px-4 py-3 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-slate-100 text-sm"
+              className="flex-1 px-4 py-3 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-slate-50"
             />
-            
             <button
               type="submit"
               disabled={isInputDisabled || !inputValue.trim()}
-              className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 focus:outline-none disabled:bg-slate-300 transition-colors flex items-center gap-2 font-medium"
+              className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium disabled:opacity-50 transition-colors"
             >
               <Send className="w-4 h-4" />
-              <span className="hidden sm:inline">Send</span>
             </button>
           </form>
         </div>
